@@ -1,0 +1,33 @@
+{
+  "date": "2026-09-12",
+  "direction": "Paris → Nantes",
+  "trains": [
+    {"dep":"06:06","dur":"3h44","durMin":224,"price":65.6,"transporter":"1 correspondance"},
+    {"dep":"06:48","dur":"3h04","durMin":184,"price":67,"transporter":"1 correspondance"},
+    {"dep":"07:12","dur":"3h57","durMin":237,"price":25,"transporter":"OUIGO Train Classique"},
+    {"dep":"07:44","dur":"2h15","durMin":135,"price":25,"transporter":"OUIGO"},
+    {"dep":"07:48","dur":"2h06","durMin":126,"price":49,"transporter":"TGV INOUI"},
+    {"dep":"08:43","dur":"3h09","durMin":189,"price":104,"transporter":"1 correspondance"},
+    {"dep":"09:39","dur":"2h15","durMin":135,"price":82,"transporter":"TGV INOUI"},
+    {"dep":"09:39","dur":"2h15","durMin":135,"price":73,"transporter":"TGV INOUI"},
+    {"dep":"10:52","dur":"2h02","durMin":122,"price":63,"transporter":"TGV INOUI"},
+    {"dep":"10:52","dur":"2h02","durMin":122,"price":63,"transporter":"TGV INOUI"},
+    {"dep":"10:57","dur":"2h55","durMin":175,"price":123,"transporter":"1 correspondance"},
+    {"dep":"11:56","dur":"4h10","durMin":250,"price":16,"transporter":"OUIGO Train Classique"},
+    {"dep":"12:22","dur":"1h58","durMin":118,"price":40,"transporter":"TGV INOUI"},
+    {"dep":"12:39","dur":"2h15","durMin":135,"price":40,"transporter":"TGV INOUI"},
+    {"dep":"12:39","dur":"2h15","durMin":135,"price":49,"transporter":"TGV INOUI"},
+    {"dep":"13:31","dur":"2h19","durMin":139,"price":36,"transporter":"TGV INOUI"},
+    {"dep":"14:51","dur":"2h02","durMin":122,"price":32,"transporter":"TGV INOUI"},
+    {"dep":"14:58","dur":"3h52","durMin":232,"price":36,"transporter":"1 correspondance"},
+    {"dep":"16:39","dur":"2h15","durMin":135,"price":49,"transporter":"TGV INOUI"},
+    {"dep":"16:57","dur":"2h57","durMin":177,"price":67,"transporter":"1 correspondance"},
+    {"dep":"17:25","dur":"3h27","durMin":207,"price":62,"transporter":"1 correspondance"},
+    {"dep":"18:12","dur":"4h07","durMin":247,"price":10,"transporter":"OUIGO Train Classique"},
+    {"dep":"18:48","dur":"2h06","durMin":126,"price":40,"transporter":"TGV INOUI"},
+    {"dep":"18:48","dur":"2h06","durMin":126,"price":40,"transporter":"TGV INOUI"},
+    {"dep":"19:39","dur":"2h15","durMin":135,"price":36,"transporter":"TGV INOUI"},
+    {"dep":"20:29","dur":"2h02","durMin":122,"price":19,"transporter":"OUIGO"},
+    {"dep":"21:52","dur":"2h09","durMin":129,"price":32,"transporter":"TGV INOUI"}
+  ]
+}

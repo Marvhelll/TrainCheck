@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SNCF Tracker — Paris ↔ Nantes</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #171d2c;
+    --panel-2: #1e263a;
+    --text: #e8ecf5;
+    --text-dim: #8892a8;
+    --border: #262e44;
+    --accent: #4f8cff;
+    --highlight: #4f8cff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; }
+  body { padding: 24px; max-width: 1320px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: var(--text-dim); font-size: 13px; margin-bottom: 24px; }
+  code { background: var(--panel-2); padding: 2px 6px; border-radius: 3px; font-size: 11px; }
+  b { color: var(--text); }
+
+  /* Unlock screen */
+  .lock { max-width: 380px; margin: 15vh auto; background: var(--panel); border-radius: 12px; padding: 32px; text-align: center; }
+  .lock h2 { margin: 0 0 4px; font-size: 18px; }
+  .lock p { color: var(--text-dim); font-size: 13px; margin: 0 0 20px; }
+  .lock input { width: 100%; padding: 10px 14px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px; margin-bottom: 10px; font-family: inherit; }
+  .lock input:focus { outline: none; border-color: var(--accent); }
+  .lock button { width: 100%; padding: 10px; background: var(--accent); border: 0; border-radius: 6px; color: white; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .lock button:disabled { opacity: 0.5; cursor: wait; }
+  .lock .err { color: #ef4444; font-size: 12px; margin-top: 10px; min-height: 16px; }
+  .lock .status { color: var(--text-dim); font-size: 12px; margin-top: 12px; }
+  .lock label { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-dim); margin-bottom: 12px; justify-content: center; }
+
+  /* App */
+  .controls { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+  .tabs { display: flex; gap: 4px; background: var(--panel); border-radius: 8px; padding: 4px; }
+  .tab { padding: 8px 14px; background: transparent; border: 0; color: var(--text-dim); cursor: pointer; border-radius: 6px; font-size: 13px; font-weight: 500; }
+  .tab.active { background: var(--accent); color: white; }
+  .field { display: flex; gap: 6px; align-items: center; background: var(--panel); border-radius: 8px; padding: 6px 14px; font-size: 13px; }
+  .field input[type=number] { width: 54px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 4px 6px; font-size: 13px; }
+  .field label { color: var(--text-dim); }
+  .field.toggle { cursor: pointer; user-select: none; }
+  .field.toggle input { margin: 0 4px 0 0; vertical-align: middle; }
+  .lock-btn { margin-left: auto; padding: 6px 12px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim); border-radius: 6px; font-size: 11px; cursor: pointer; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--panel); border-radius: 8px; padding: 14px 16px; }
+  .stat-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .stat-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  .row-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 24px; }
+  .daycard { background: var(--panel); border-radius: 10px; padding: 14px; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; position: relative; }
+  .daycard:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
+  .daycard.selected { border-color: white; }
+  .daycard.today::before { content: 'AUJOURD\'HUI'; position: absolute; top: -8px; left: 12px; background: var(--accent); color: white; font-size: 9px; padding: 2px 6px; border-radius: 3px; font-weight: 700; letter-spacing: 0.5px; }
+  .daycard.no-data { opacity: 0.4; cursor: not-allowed; }
+  .daycard-date { font-size: 12px; color: var(--text-dim); text-transform: capitalize; }
+  .daycard-title { font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .price-value { font-size: 18px; font-weight: 700; margin-top: 10px; }
+  .price-sub { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .spread { display: flex; height: 4px; border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .spread > div { flex: 1; }
+  .daycard-meta { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
+
+  .detail { background: var(--panel); border-radius: 10px; padding: 20px; margin-top: 8px; }
+  .detail-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  .detail-title { font-size: 17px; font-weight: 600; }
+  .detail-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .train-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
+  .train { display: grid; grid-template-columns: 68px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; background: var(--panel-2); border-radius: 6px; border-left: 3px solid transparent; }
+  .train.cheap { border-color: #22c55e; }
+  .train.mid { border-color: #eab308; }
+  .train.pricey { border-color: #ef4444; }
+  .train-time { font-family: ui-monospace, SF Mono, monospace; font-size: 13px; font-weight: 700; }
+  .train-time small { font-family: -apple-system, sans-serif; font-size: 9px; color: var(--text-dim); display: block; margin-top: 1px; font-weight: 400; }
+  .train-meta { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+  .train-price { font-size: 15px; font-weight: 700; }
+  .train.filtered-out { opacity: 0.3; }
+  .train .warn { color: #f97316; font-size: 10px; margin-left: 4px; }
+  .train .moon { color: #a78bfa; font-size: 10px; margin-left: 4px; }
+
+  .legend { display: flex; gap: 12px; align-items: center; margin-top: 20px; font-size: 12px; color: var(--text-dim); flex-wrap: wrap; }
+  .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<!-- Écran de déverrouillage -->
+<div id="lockScreen" class="lock">
+  <h2>SNCF Tracker</h2>
+  <p>Base chiffrée — entre ta passphrase</p>
+  <form id="unlockForm">
+    <input type="password" id="passInput" placeholder="Passphrase" autocomplete="current-password" autofocus />
+    <label><input type="checkbox" id="rememberMe" checked /> Retenir dans cet onglet</label>
+    <button type="submit" id="unlockBtn">Déverrouiller</button>
+    <div class="err" id="unlockErr"></div>
+    <div class="status" id="unlockStatus"></div>
+  </form>
+</div>
+
+<!-- Application -->
+<div id="app" style="display:none;">
+  <h1>SNCF Tracker — Paris ↔ Nantes</h1>
+  <p class="subtitle">Détail complet des trains via <code>/bff/api/v1/itineraries</code>. Snapshot le <span id="generatedAt"></span>.</p>
+
+  <div class="controls">
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-dir="pn">Paris → Nantes</button>
+      <button class="tab" data-dir="np">Nantes → Paris</button>
+    </div>
+    <div class="field toggle"><label><input type="checkbox" id="directOnly" checked /> Directs uniquement</label></div>
+    <div class="field toggle"><label><input type="checkbox" id="hideSlow" checked /> Cacher &gt; 2h30</label></div>
+    <div class="field toggle"><label><input type="checkbox" id="hideEarly" checked /> Cacher &lt; 7h ou &gt; 21h</label></div>
+    <div class="field"><label>Max</label><input type="number" id="maxPrice" value="60" min="10" step="5" /><label>€</label></div>
+    <button class="lock-btn" id="relockBtn">🔒 Verrouiller</button>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <h2 style="font-size:14px;margin:0 0 10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;">Jours (clic pour voir tous les trains)</h2>
+  <div class="row-days" id="dayCards"></div>
+
+  <div id="detailPanel" style="display:none;">
+    <div class="detail">
+      <div class="detail-header">
+        <div>
+          <div class="detail-title" id="detailTitle"></div>
+          <div class="detail-sub" id="detailSub"></div>
+        </div>
+      </div>
+      <div class="train-list" id="trainList"></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span>Bordure verte = ≤ 25€ · jaune = 26-50€ · rouge = &gt; 50€</span>
+    <span style="margin-left:auto">⚠ = &gt; 3h · 🌙 = très tôt / très tard</span>
+  </div>
+
+  <div class="footer">
+    <b>Chiffrement :</b> base SQLite chiffrée AES-GCM avec ta passphrase (dérivation PBKDF2-SHA256, 200k itérations). La passphrase n'est jamais envoyée, tout se passe dans ton browser. La clé reste en RAM et disparaît quand tu fermes l'onglet — sauf si "Retenir dans cet onglet" est coché (sessionStorage, effacé à la fermeture du navigateur).
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+<script>
+const PBKDF2_ITERATIONS = 200000;
+const ENCRYPTED_URL = 'data.sqlite.enc';
+const state = { dir: 'pn', selectedDate: null, directOnly: true, hideSlow: true, hideEarly: true, maxPrice: 60, db: null };
+
+/* ---------- Chiffrement / SQLite ---------- */
+
+async function deriveKey(passphrase, salt) {
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256'},
+    baseKey,
+    {name: 'AES-GCM', length: 256},
+    false,
+    ['decrypt']
+  );
+}
+
+async function fetchAndDecrypt(passphrase) {
+  const setStatus = m => document.getElementById('unlockStatus').textContent = m;
+  setStatus('Téléchargement…');
+  const r = await fetch(ENCRYPTED_URL, {cache: 'no-cache'});
+  if (!r.ok) throw new Error(`Fichier ${ENCRYPTED_URL} introuvable (${r.status})`);
+  const buf = new Uint8Array(await r.arrayBuffer());
+  if (buf.length < 32) throw new Error('Fichier chiffré invalide');
+  const salt = buf.slice(0, 16);
+  const iv = buf.slice(16, 28);
+  const ct = buf.slice(28);
+  setStatus('Dérivation de la clé (PBKDF2 200k)…');
+  const key = await deriveKey(passphrase, salt);
+  setStatus('Déchiffrement…');
+  const pt = await crypto.subtle.decrypt({name: 'AES-GCM', iv}, key, ct);
+  setStatus('Chargement de la base…');
+  const SQL = await initSqlJs({locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${f}`});
+  return new SQL.Database(new Uint8Array(pt));
+}
+
+/* ---------- Rendu UI ---------- */
+
+const MONTHS_FR = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+const WEEKDAYS = ['lun.','mar.','mer.','jeu.','ven.','sam.','dim.'];
+
+function fmtDate(d) { const [y,m,day] = d.split('-').map(Number); const dt = new Date(y, m-1, day); return `${WEEKDAYS[(dt.getDay()+6)%7]} ${day} ${MONTHS_FR[m-1]}`; }
+function fmtDateLong(d) { return new Date(d).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'}); }
+function isReasonable(dep) { if (!dep) return true; const h = parseInt(dep.slice(0,2)); return h >= 7 && h <= 21; }
+
+function query(sql, params = []) {
+  const stmt = state.db.prepare(sql);
+  const rows = [];
+  try {
+    stmt.bind(params);
+    while (stmt.step()) rows.push(stmt.getAsObject());
+  } finally { stmt.free(); }
+  return rows;
+}
+
+/** Retourne la dernière snapshot par jour pour une direction. */
+function loadTrainsForDirection(dir) {
+  return query(`
+    WITH latest AS (
+      SELECT direction, travel_day, MAX(fetched_at) AS ts
+      FROM trains WHERE direction = ? GROUP BY travel_day
+    )
+    SELECT t.travel_day, t.dep, t.dur, t.dur_min, t.price, t.transporter, t.direct
+    FROM trains t
+    JOIN latest l ON l.direction = t.direction AND l.travel_day = t.travel_day AND l.ts = t.fetched_at
+    WHERE t.price IS NOT NULL
+    ORDER BY t.travel_day, t.dep
+  `, [dir]);
+}
+
+function trainPassesFilters(t) {
+  if (state.directOnly && !t.direct) return false;
+  if (state.hideSlow && (t.dur_min == null || t.dur_min > 150)) return false;
+  if (state.hideEarly && !isReasonable(t.dep)) return false;
+  return true;
+}
+
+function trainClass(price) {
+  if (price == null) return '';
+  if (price <= 25) return 'cheap';
+  if (price <= 50) return 'mid';
+  return 'pricey';
+}
+
+function scoreColor(price) {
+  if (price == null) return 'var(--text-dim)';
+  if (price <= 25) return '#4ade80';
+  if (price <= 50) return '#facc15';
+  return '#f87171';
+}
+
+function render() {
+  const trains = loadTrainsForDirection(state.dir);
+  const byDay = new Map();
+  for (const t of trains) {
+    if (!byDay.has(t.travel_day)) byDay.set(t.travel_day, []);
+    byDay.get(t.travel_day).push(t);
+  }
+
+  const withFilter = trains.filter(trainPassesFilters);
+  const underMax = withFilter.filter(t => t.price <= state.maxPrice);
+  const statsHtml = withFilter.length ? `
+    <div class="stat"><div class="stat-label">Jours de données</div>
+      <div class="stat-value">${byDay.size}</div>
+      <div class="stat-sub">${state.dir === 'pn' ? 'Paris → Nantes' : 'Nantes → Paris'}</div></div>
+    <div class="stat"><div class="stat-label">Min filtré</div>
+      <div class="stat-value" style="color:#4ade80">${Math.min(...withFilter.map(t=>t.price))} €</div>
+      <div class="stat-sub">${withFilter.length} trains sélectionnés</div></div>
+    <div class="stat"><div class="stat-label">Max filtré</div>
+      <div class="stat-value" style="color:#f87171">${Math.max(...withFilter.map(t=>t.price))} €</div></div>
+    <div class="stat"><div class="stat-label">Moyenne filtrée</div>
+      <div class="stat-value">${(withFilter.reduce((a,b)=>a+b.price,0)/withFilter.length).toFixed(0)} €</div></div>
+    <div class="stat"><div class="stat-label">Sous ${state.maxPrice} €</div>
+      <div class="stat-value" style="color:var(--highlight)">${underMax.length}</div>
+      <div class="stat-sub">trains correspondant</div></div>
+  ` : '<div class="stat">Aucune donnée</div>';
+  document.getElementById('stats').innerHTML = statsHtml;
+
+  const today = new Date().toISOString().slice(0,10);
+  const dayEntries = Array.from(byDay.entries()).sort((a,b) => a[0].localeCompare(b[0]));
+  document.getElementById('dayCards').innerHTML = dayEntries.map(([day, ts]) => {
+    const filtered = ts.filter(trainPassesFilters);
+    const min = ts.length ? Math.min(...ts.map(t=>t.price)) : null;
+    const max = ts.length ? Math.max(...ts.map(t=>t.price)) : null;
+    const minF = filtered.length ? Math.min(...filtered.map(t=>t.price)) : null;
+    const minFT = filtered.find(t => t.price === minF);
+    const buckets = [0,0,0,0,0];
+    for (const t of filtered) {
+      const p = t.price;
+      if (p <= 15) buckets[0]++;
+      else if (p <= 25) buckets[1]++;
+      else if (p <= 40) buckets[2]++;
+      else if (p <= 60) buckets[3]++;
+      else buckets[4]++;
+    }
+    const total = buckets.reduce((a,b)=>a+b,0);
+    const colors = ['#22c55e','#84cc16','#eab308','#f97316','#ef4444'];
+    const spreadHtml = total ? `<div class="spread">${buckets.map((v,i) => v ? `<div style="flex:${v};background:${colors[i]}"></div>` : '').join('')}</div>` : '';
+    const belowMax = filtered.filter(t => t.price <= state.maxPrice).length;
+    return `<div class="daycard${day === today ? ' today' : ''}${day === state.selectedDate ? ' selected' : ''}" data-date="${day}">
+      <div class="daycard-date">${fmtDate(day)}</div>
+      <div class="daycard-title">Min ${min}€ · max ${max}€</div>
+      <div class="price-value" style="color:${scoreColor(minF)}">${minF != null ? minF + ' €' : '—'}</div>
+      <div class="price-sub">${minFT ? `${minFT.dep} · ${minFT.dur} · ${(minFT.transporter||'').replace('Direct ','')}` : 'Aucun train dans les filtres'}</div>
+      ${spreadHtml}
+      <div class="daycard-meta">${filtered.length}/${ts.length} trains · ${belowMax} ≤ ${state.maxPrice}€</div>
+    </div>`;
+  }).join('');
+  document.querySelectorAll('.daycard[data-date]').forEach(el => {
+    el.addEventListener('click', () => { state.selectedDate = el.dataset.date; render(); });
+  });
+
+  const panel = document.getElementById('detailPanel');
+  if (state.selectedDate && byDay.has(state.selectedDate)) {
+    const ts = byDay.get(state.selectedDate);
+    panel.style.display = 'block';
+    document.getElementById('detailTitle').textContent = fmtDateLong(state.selectedDate);
+    const filtered = ts.filter(trainPassesFilters);
+    document.getElementById('detailSub').textContent =
+      `${ts.length} trains · min brut ${Math.min(...ts.map(t=>t.price))}€ · max ${Math.max(...ts.map(t=>t.price))}€ · ${filtered.length} passent les filtres`;
+    document.getElementById('trainList').innerHTML = ts.map(t => {
+      const cls = ['train', trainClass(t.price)];
+      if (!trainPassesFilters(t)) cls.push('filtered-out');
+      const warn = (t.dur_min || 0) > 180 ? '<span class="warn">⚠</span>' : '';
+      const moon = !isReasonable(t.dep) ? '<span class="moon">🌙</span>' : '';
+      return `<div class="${cls.join(' ')}">
+        <div class="train-time">${t.dep}${warn}${moon}<small>${t.dur}</small></div>
+        <div class="train-meta"><b>${t.transporter}</b></div>
+        <div class="train-price">${t.price} €</div>
+      </div>`;
+    }).join('');
+  } else {
+    panel.style.display = 'none';
+  }
+
+  const metaRow = query("SELECT value FROM meta WHERE key = 'generated_at'");
+  if (metaRow[0]?.value) {
+    document.getElementById('generatedAt').textContent = new Date(metaRow[0].value).toLocaleString('fr-FR');
+  }
+}
+
+/* ---------- Wiring UI ---------- */
+
+function showApp() {
+  document.getElementById('lockScreen').style.display = 'none';
+  document.getElementById('app').style.display = '';
+  render();
+}
+
+function showLock() {
+  state.db = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('lockScreen').style.display = '';
+  document.getElementById('passInput').value = '';
+  document.getElementById('passInput').focus();
+}
+
+document.getElementById('unlockForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pass = document.getElementById('passInput').value;
+  const btn = document.getElementById('unlockBtn');
+  const errEl = document.getElementById('unlockErr');
+  errEl.textContent = '';
+  btn.disabled = true;
+  try {
+    state.db = await fetchAndDecrypt(pass);
+    if (document.getElementById('rememberMe').checked) sessionStorage.setItem('sncf_pass', pass);
+    showApp();
+  } catch (err) {
+    errEl.textContent = String(err).includes('decrypt') || String(err).includes('OperationError')
+      ? 'Passphrase incorrecte'
+      : 'Erreur : ' + err.message;
+    document.getElementById('unlockStatus').textContent = '';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('relockBtn').addEventListener('click', () => {
+  sessionStorage.removeItem('sncf_pass');
+  showLock();
+});
+
+document.getElementById('tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab'); if (!btn) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  state.dir = btn.dataset.dir;
+  state.selectedDate = null;
+  render();
+});
+for (const id of ['directOnly', 'hideSlow', 'hideEarly']) {
+  document.getElementById(id).addEventListener('change', e => { state[id] = e.target.checked; render(); });
+}
+document.getElementById('maxPrice').addEventListener('input', e => { state.maxPrice = Number(e.target.value) || 0; render(); });
+
+// Auto-unlock si passphrase déjà en sessionStorage
+(async () => {
+  const cached = sessionStorage.getItem('sncf_pass');
+  if (!cached) return;
+  try {
+    document.getElementById('unlockStatus').textContent = 'Déverrouillage auto…';
+    state.db = await fetchAndDecrypt(cached);
+    showApp();
+  } catch {
+    sessionStorage.removeItem('sncf_pass');
+    document.getElementById('unlockStatus').textContent = '';
+  }
+})();
+</script>
+</body>
+</html>
