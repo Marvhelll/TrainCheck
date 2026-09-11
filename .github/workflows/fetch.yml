@@ -1,0 +1,73 @@
+name: Fetch SNCF data
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'  # toutes les 6h à H:17 (évite l'heure pile où tout le monde cronne)
+  workflow_dispatch:  # bouton manuel
+
+concurrency:
+  group: fetch
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install deps
+        run: pip install httpx cryptography
+
+      - name: Fetch calendar min-prices (91 jours)
+        run: python fetch_calendar.py --days 90 --out data.json
+        env:
+          SNCF_DATADOME: ${{ secrets.SNCF_DATADOME }}
+        continue-on-error: true  # DataDome peut bloquer, on continue
+
+      - name: Fetch full-day trains (30 jours)
+        run: python fetch_full_day.py --days 30
+        env:
+          SNCF_DATADOME: ${{ secrets.SNCF_DATADOME }}
+        continue-on-error: true
+
+      - name: Build & encrypt SQLite
+        env:
+          SNCF_PASSPHRASE: ${{ secrets.SNCF_PASSPHRASE }}
+        run: python pack_db.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name "sncf-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data.sqlite.enc data.json full_days.json
+          git diff --cached --quiet && echo "no changes" && exit 0
+          git commit -m "chore(data): refresh $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
+
+  deploy-pages:
+    needs: fetch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}  # récupère le commit du bot
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
