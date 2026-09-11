@@ -59,6 +59,10 @@
   .daycard.selected { border-color: white; }
   .daycard.today::before { content: 'AUJOURD\'HUI'; position: absolute; top: -8px; left: 12px; background: var(--accent); color: white; font-size: 9px; padding: 2px 6px; border-radius: 3px; font-weight: 700; letter-spacing: 0.5px; }
   .daycard.no-data { opacity: 0.4; cursor: not-allowed; }
+  .daycard.best-only { background: rgba(23,29,44,0.6); }
+  .badge-detail, .badge-min { position: absolute; top: 8px; right: 8px; font-size: 8px; padding: 2px 5px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+  .badge-detail { background: rgba(79,140,255,0.18); color: #93c5fd; }
+  .badge-min { background: rgba(136,146,168,0.18); color: var(--text-dim); }
   .daycard-date { font-size: 12px; color: var(--text-dim); text-transform: capitalize; }
   .daycard-title { font-size: 16px; font-weight: 700; margin-top: 2px; }
   .price-value { font-size: 18px; font-weight: 700; margin-top: 10px; }
@@ -205,7 +209,7 @@ function query(sql, params = []) {
   return rows;
 }
 
-/** Retourne la dernière snapshot par jour pour une direction. */
+/** Détail complet (dernière snapshot par jour). */
 function loadTrainsForDirection(dir) {
   return query(`
     WITH latest AS (
@@ -218,6 +222,22 @@ function loadTrainsForDirection(dir) {
     WHERE t.price IS NOT NULL
     ORDER BY t.travel_day, t.dep
   `, [dir]);
+}
+
+/** Prix min du calendrier (dernière snapshot par jour) — 90 jours. */
+function loadBestPricesForDirection(dir) {
+  try {
+    return query(`
+      WITH latest AS (
+        SELECT direction, travel_day, MAX(fetched_at) AS ts
+        FROM best_prices WHERE direction = ? GROUP BY travel_day
+      )
+      SELECT b.travel_day, b.price, b.dep
+      FROM best_prices b
+      JOIN latest l ON l.direction = b.direction AND l.travel_day = b.travel_day AND l.ts = b.fetched_at
+      ORDER BY b.travel_day
+    `, [dir]);
+  } catch { return []; }
 }
 
 function trainPassesFilters(t) {
@@ -243,18 +263,22 @@ function scoreColor(price) {
 
 function render() {
   const trains = loadTrainsForDirection(state.dir);
-  const byDay = new Map();
+  const bestPrices = loadBestPricesForDirection(state.dir);
+  const byDayFull = new Map();  // détail complet
   for (const t of trains) {
-    if (!byDay.has(t.travel_day)) byDay.set(t.travel_day, []);
-    byDay.get(t.travel_day).push(t);
+    if (!byDayFull.has(t.travel_day)) byDayFull.set(t.travel_day, []);
+    byDayFull.get(t.travel_day).push(t);
   }
+  const byDayBest = new Map();  // fallback calendrier
+  for (const b of bestPrices) byDayBest.set(b.travel_day, b);
 
   const withFilter = trains.filter(trainPassesFilters);
   const underMax = withFilter.filter(t => t.price <= state.maxPrice);
+  const totalDays = new Set([...byDayFull.keys(), ...byDayBest.keys()]).size;
   const statsHtml = withFilter.length ? `
-    <div class="stat"><div class="stat-label">Jours de données</div>
-      <div class="stat-value">${byDay.size}</div>
-      <div class="stat-sub">${state.dir === 'pn' ? 'Paris → Nantes' : 'Nantes → Paris'}</div></div>
+    <div class="stat"><div class="stat-label">Jours couverts</div>
+      <div class="stat-value">${totalDays}</div>
+      <div class="stat-sub">${byDayFull.size} en détail · ${byDayBest.size - byDayFull.size} en prix min</div></div>
     <div class="stat"><div class="stat-label">Min filtré</div>
       <div class="stat-value" style="color:#4ade80">${Math.min(...withFilter.map(t=>t.price))} €</div>
       <div class="stat-sub">${withFilter.length} trains sélectionnés</div></div>
@@ -269,42 +293,61 @@ function render() {
   document.getElementById('stats').innerHTML = statsHtml;
 
   const today = new Date().toISOString().slice(0,10);
-  const dayEntries = Array.from(byDay.entries()).sort((a,b) => a[0].localeCompare(b[0]));
-  document.getElementById('dayCards').innerHTML = dayEntries.map(([day, ts]) => {
-    const filtered = ts.filter(trainPassesFilters);
-    const min = ts.length ? Math.min(...ts.map(t=>t.price)) : null;
-    const max = ts.length ? Math.max(...ts.map(t=>t.price)) : null;
-    const minF = filtered.length ? Math.min(...filtered.map(t=>t.price)) : null;
-    const minFT = filtered.find(t => t.price === minF);
-    const buckets = [0,0,0,0,0];
-    for (const t of filtered) {
-      const p = t.price;
-      if (p <= 15) buckets[0]++;
-      else if (p <= 25) buckets[1]++;
-      else if (p <= 40) buckets[2]++;
-      else if (p <= 60) buckets[3]++;
-      else buckets[4]++;
+  const allDays = Array.from(new Set([...byDayFull.keys(), ...byDayBest.keys()])).sort();
+
+  document.getElementById('dayCards').innerHTML = allDays.map(day => {
+    const ts = byDayFull.get(day);
+    const best = byDayBest.get(day);
+    const isSel = day === state.selectedDate;
+    const isToday = day === today;
+    const classes = ['daycard', isToday && 'today', isSel && 'selected', !ts && 'best-only'].filter(Boolean).join(' ');
+
+    if (ts) {
+      // Détail complet
+      const filtered = ts.filter(trainPassesFilters);
+      const min = Math.min(...ts.map(t=>t.price));
+      const max = Math.max(...ts.map(t=>t.price));
+      const minF = filtered.length ? Math.min(...filtered.map(t=>t.price)) : null;
+      const minFT = filtered.find(t => t.price === minF);
+      const buckets = [0,0,0,0,0];
+      for (const t of filtered) {
+        const p = t.price;
+        if (p <= 15) buckets[0]++;
+        else if (p <= 25) buckets[1]++;
+        else if (p <= 40) buckets[2]++;
+        else if (p <= 60) buckets[3]++;
+        else buckets[4]++;
+      }
+      const total = buckets.reduce((a,b)=>a+b,0);
+      const colors = ['#22c55e','#84cc16','#eab308','#f97316','#ef4444'];
+      const spreadHtml = total ? `<div class="spread">${buckets.map((v,i) => v ? `<div style="flex:${v};background:${colors[i]}"></div>` : '').join('')}</div>` : '';
+      const belowMax = filtered.filter(t => t.price <= state.maxPrice).length;
+      return `<div class="${classes}" data-date="${day}">
+        <div class="badge-detail">détail</div>
+        <div class="daycard-date">${fmtDate(day)}</div>
+        <div class="daycard-title">Min ${min}€ · max ${max}€</div>
+        <div class="price-value" style="color:${scoreColor(minF)}">${minF != null ? minF + ' €' : '—'}</div>
+        <div class="price-sub">${minFT ? `${minFT.dep} · ${minFT.dur} · ${(minFT.transporter||'').replace('Direct ','')}` : 'Aucun train dans les filtres'}</div>
+        ${spreadHtml}
+        <div class="daycard-meta">${filtered.length}/${ts.length} trains · ${belowMax} ≤ ${state.maxPrice}€</div>
+      </div>`;
+    } else {
+      // Prix min uniquement
+      return `<div class="${classes}" data-date="${day}">
+        <div class="badge-min">prix min</div>
+        <div class="daycard-date">${fmtDate(day)}</div>
+        <div class="price-value" style="color:${scoreColor(best.price)}">${best.price} €</div>
+        <div class="price-sub">départ ${best.dep || '?'} · détail à venir</div>
+      </div>`;
     }
-    const total = buckets.reduce((a,b)=>a+b,0);
-    const colors = ['#22c55e','#84cc16','#eab308','#f97316','#ef4444'];
-    const spreadHtml = total ? `<div class="spread">${buckets.map((v,i) => v ? `<div style="flex:${v};background:${colors[i]}"></div>` : '').join('')}</div>` : '';
-    const belowMax = filtered.filter(t => t.price <= state.maxPrice).length;
-    return `<div class="daycard${day === today ? ' today' : ''}${day === state.selectedDate ? ' selected' : ''}" data-date="${day}">
-      <div class="daycard-date">${fmtDate(day)}</div>
-      <div class="daycard-title">Min ${min}€ · max ${max}€</div>
-      <div class="price-value" style="color:${scoreColor(minF)}">${minF != null ? minF + ' €' : '—'}</div>
-      <div class="price-sub">${minFT ? `${minFT.dep} · ${minFT.dur} · ${(minFT.transporter||'').replace('Direct ','')}` : 'Aucun train dans les filtres'}</div>
-      ${spreadHtml}
-      <div class="daycard-meta">${filtered.length}/${ts.length} trains · ${belowMax} ≤ ${state.maxPrice}€</div>
-    </div>`;
   }).join('');
   document.querySelectorAll('.daycard[data-date]').forEach(el => {
     el.addEventListener('click', () => { state.selectedDate = el.dataset.date; render(); });
   });
 
   const panel = document.getElementById('detailPanel');
-  if (state.selectedDate && byDay.has(state.selectedDate)) {
-    const ts = byDay.get(state.selectedDate);
+  if (state.selectedDate && byDayFull.has(state.selectedDate)) {
+    const ts = byDayFull.get(state.selectedDate);
     panel.style.display = 'block';
     document.getElementById('detailTitle').textContent = fmtDateLong(state.selectedDate);
     const filtered = ts.filter(trainPassesFilters);
@@ -321,6 +364,13 @@ function render() {
         <div class="train-price">${t.price} €</div>
       </div>`;
     }).join('');
+  } else if (state.selectedDate && byDayBest.has(state.selectedDate)) {
+    const best = byDayBest.get(state.selectedDate);
+    panel.style.display = 'block';
+    document.getElementById('detailTitle').textContent = fmtDateLong(state.selectedDate);
+    document.getElementById('detailSub').textContent =
+      `Prix min uniquement (${best.price}€ départ ${best.dep}). Le détail complet sera disponible dès qu'un cron aura fetch cette date via /itineraries.`;
+    document.getElementById('trainList').innerHTML = '';
   } else {
     panel.style.display = 'none';
   }
