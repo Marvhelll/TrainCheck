@@ -54,6 +54,9 @@
   .stat-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
   .row-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 24px; }
+  .row-days > #detailPanel { grid-column: 1 / -1; margin: 0; scroll-margin-top: 8px; animation: slideIn 0.2s ease-out; }
+  .row-days > #detailPanel .detail { margin: 0; }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
   .daycard { background: var(--panel); border-radius: 10px; padding: 14px; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; position: relative; }
   .daycard:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
   .daycard.selected { border-color: white; }
@@ -261,6 +264,34 @@ function scoreColor(price) {
   return '#f87171';
 }
 
+function positionDetailPanel() {
+  const panel = document.getElementById('detailPanel');
+  const container = document.getElementById('dayCards');
+  if (!state.selectedDate || panel.style.display === 'none') {
+    // Cache — sortir du grid
+    if (panel.parentElement === container) container.parentElement.appendChild(panel);
+    return;
+  }
+  const selCard = container.querySelector(`.daycard[data-date="${state.selectedDate}"]`);
+  if (!selCard) return;
+  // Trouve la dernière carte de la même rangée (même top)
+  const selTop = selCard.getBoundingClientRect().top;
+  const cards = Array.from(container.querySelectorAll('.daycard'));
+  let lastOfRow = selCard;
+  for (const c of cards) {
+    if (Math.abs(c.getBoundingClientRect().top - selTop) < 2) lastOfRow = c;
+  }
+  // Insère le panel juste après la fin de la rangée
+  if (lastOfRow.nextElementSibling !== panel) {
+    lastOfRow.after(panel);
+  }
+}
+
+// Repositionne le panel quand la fenêtre change de taille (nb colonnes peut changer)
+window.addEventListener('resize', () => {
+  if (state.selectedDate) positionDetailPanel();
+});
+
 function render() {
   const trains = loadTrainsForDirection(state.dir);
   const bestPrices = loadBestPricesForDirection(state.dir);
@@ -342,7 +373,14 @@ function render() {
     }
   }).join('');
   document.querySelectorAll('.daycard[data-date]').forEach(el => {
-    el.addEventListener('click', () => { state.selectedDate = el.dataset.date; render(); });
+    el.addEventListener('click', () => {
+      const willClose = state.selectedDate === el.dataset.date;
+      state.selectedDate = willClose ? null : el.dataset.date;
+      render();
+      if (!willClose) {
+        requestAnimationFrame(() => document.getElementById('detailPanel').scrollIntoView({behavior: 'smooth', block: 'nearest'}));
+      }
+    });
   });
 
   const panel = document.getElementById('detailPanel');
@@ -374,6 +412,8 @@ function render() {
   } else {
     panel.style.display = 'none';
   }
+
+  positionDetailPanel();
 
   const metaRow = query("SELECT value FROM meta WHERE key = 'generated_at'");
   if (metaRow[0]?.value) {
