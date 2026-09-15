@@ -25,7 +25,7 @@ import os
 import secrets
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from cryptography.hazmat.primitives import hashes
@@ -73,16 +73,27 @@ def build_db() -> None:
     """)
 
     fetched_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    today = date.today()
+
+    def is_future_or_today(day_iso: str) -> bool:
+        try:
+            return date.fromisoformat(day_iso[:10]) >= today
+        except (ValueError, TypeError):
+            return False
 
     # /itineraries
     full = HERE / "full_days.json"
     if full.exists():
         data = json.loads(full.read_text())
         rows = []
+        skipped_past = 0
         for direction, days in data.items():
             if direction not in ("pn", "np"):
                 continue
             for day, trains in days.items():
+                if not is_future_or_today(day):
+                    skipped_past += 1
+                    continue
                 for t in trains:
                     if t.get("price") is None:
                         continue
@@ -95,24 +106,29 @@ def build_db() -> None:
         conn.executemany(
             "INSERT INTO trains (fetched_at, direction, travel_day, dep, dur, dur_min, price, transporter, direct) "
             "VALUES (?,?,?,?,?,?,?,?,?)", rows)
-        print(f"[i] {len(rows)} trains insérés depuis full_days.json")
+        print(f"[i] {len(rows)} trains insérés depuis full_days.json ({skipped_past} jours passés ignorés)")
 
     # /calendar/best-prices
     cal = HERE / "data.json"
     if cal.exists():
         data = json.loads(cal.read_text())
         rows = []
+        skipped_past = 0
         for direction, days in data.items():
             if direction not in ("pn", "np"):
                 continue
             for r in days:
+                day = r.get("date", "")
+                if not is_future_or_today(day):
+                    skipped_past += 1
+                    continue
                 rows.append((
-                    fetched_at, direction, r.get("date"),
+                    fetched_at, direction, day,
                     r.get("price"), r.get("time"),
                 ))
         conn.executemany(
             "INSERT INTO best_prices (fetched_at, direction, travel_day, price, dep) VALUES (?,?,?,?,?)", rows)
-        print(f"[i] {len(rows)} prix min insérés depuis data.json")
+        print(f"[i] {len(rows)} prix min insérés depuis data.json ({skipped_past} jours passés ignorés)")
 
     conn.execute("INSERT INTO meta (key, value) VALUES ('generated_at', ?)", (fetched_at,))
     conn.commit()

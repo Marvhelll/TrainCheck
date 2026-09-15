@@ -193,7 +193,28 @@ def cmd_status(state: dict) -> None:
                   + (f"  · min raisonnable {reasonable_min}€" if reasonable_min else ""))
 
 
+def prune_past_days(state: dict) -> int:
+    """Supprime toutes les dates strictement antérieures à aujourd'hui."""
+    today = date.today()
+    removed = 0
+    for d in ("pn", "np"):
+        for day_iso in list(state.get(d, {}).keys()):
+            try:
+                if date.fromisoformat(day_iso) < today:
+                    del state[d][day_iso]
+                    removed += 1
+            except ValueError:
+                pass
+    if removed:
+        save_state(state)
+    return removed
+
+
 def cmd_fetch(state: dict, days: int, directions: list[str], refresh: str | None) -> None:
+    n_removed = prune_past_days(state)
+    if n_removed:
+        print(f"[i] {n_removed} dates passées purgées du cache")
+
     datadome_cookie = os.environ.get("SNCF_DATADOME")
     cookies = {}
     if datadome_cookie:

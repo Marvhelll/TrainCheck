@@ -306,10 +306,11 @@ function render() {
   const withFilter = trains.filter(trainPassesFilters);
   const underMax = withFilter.filter(t => t.price <= state.maxPrice);
   const totalDays = new Set([...byDayFull.keys(), ...byDayBest.keys()]).size;
+  const bestOnlyDays = [...byDayBest.keys()].filter(d => !byDayFull.has(d)).length;
   const statsHtml = withFilter.length ? `
     <div class="stat"><div class="stat-label">Jours couverts</div>
       <div class="stat-value">${totalDays}</div>
-      <div class="stat-sub">${byDayFull.size} en détail · ${byDayBest.size - byDayFull.size} en prix min</div></div>
+      <div class="stat-sub">${byDayFull.size} en détail · ${bestOnlyDays} en prix min</div></div>
     <div class="stat"><div class="stat-label">Min filtré</div>
       <div class="stat-value" style="color:#4ade80">${Math.min(...withFilter.map(t=>t.price))} €</div>
       <div class="stat-sub">${withFilter.length} trains sélectionnés</div></div>

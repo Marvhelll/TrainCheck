@@ -138,11 +138,15 @@ def main() -> int:
             except httpx.HTTPStatusError as e:
                 print(f"[!] {label} : HTTP {e.response.status_code}", file=sys.stderr)
                 print(f"    body: {e.response.text[:500]}", file=sys.stderr)
-                result[label] = {"error": e.response.status_code, "body": e.response.text[:2000]}
                 continue
 
             summarize(rows, label)
-            result[label] = rows
+            # Normalise en {date, price, time} pour pack_db.py
+            result[d] = [
+                {"date": r["date"][:10], "price": r.get("roundedPrice"),
+                 "time": r["date"][11:16] if r.get("date") else None}
+                for r in rows if r.get("roundedPrice") is not None
+            ]
 
     args.out.write_text(json.dumps(result, ensure_ascii=False, indent=2))
     print(f"\n→ dump complet écrit dans {args.out}")
